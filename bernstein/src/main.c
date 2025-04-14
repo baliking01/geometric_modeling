@@ -7,7 +7,6 @@
 const double POINT_RADIUS = 10.0;
 const int N_POINTS = 4;
 const int INTERP_RES = 100;
-int guide_line = 0;
 
 /**
  * A simple point structure.
@@ -18,66 +17,43 @@ typedef struct Point
     double y;
 } Point;
 
-
-/*
-TODO:
-dynamic addition and removal of controll points by user
-more compact data structures (curve_t, linked list for control points)
-generate a random controll points at program start
-*/
-
-// De Casteljau algorithm
-Point de_casteljau(SDL_Renderer *renderer, Point *points, float t, int display_lines)
+// TODO: implement look up table for factorial
+unsigned long binomial_coefficient(int n, int k)
 {
-    Point pts[N_POINTS];
+    if (k > n) return 0;
+    if (k == 0 || k == n) return 1;
+    unsigned long res = 1;
+    for (int i = 1; i <= k; i++) {
+        res *= n - (k - i);
+        res /= i;
+    }
+    return res;
+}
 
+// compute the k-th bernstein polynomial of n-th degree at t
+double bernstein(int n, int k, double t)
+{
+    return binomial_coefficient(n, k) * pow(t, k) * pow(1 - t, n - k);
+}
+
+Point approx(Point *points, double t)
+{
+    Point sum = {0};
+    double B;
+    // degree of bernstein polynomials is the same as the number of control points - 1
     for (int i = 0; i < N_POINTS; i++) {
-        pts[i] = points[i];
+        B = bernstein(N_POINTS - 1, i, t);
+        sum.x += points[i].x * B;
+        sum.y += points[i].y * B;
     }
-
-    if (display_lines) {
-        for (int k = 0; k < N_POINTS - 1; k++) {
-            for(int i = 0; i < N_POINTS - k - 1; i++) {
-                pts[i].x = t*pts[i].x + (1-t)*pts[i+1].x;
-                pts[i].y = t*pts[i].y + (1-t)*pts[i+1].y;
-            }
-
-            // draw line segments
-            for(int i = 0; i < N_POINTS - k - 1; i++) {
-                SDL_RenderDrawLine(renderer, pts[i].x, pts[i].y, pts[i+1].x, pts[i+1].y);
-            }
-        }
-    }
-    else {
-        for (int k = 0; k < N_POINTS - 1; k++) {
-            for(int i = 0; i < N_POINTS - k - 1; i++) {
-                pts[i].x = t*pts[i].x + (1-t)*pts[i+1].x;
-                pts[i].y = t*pts[i].y + (1-t)*pts[i+1].y;
-            }
-        }
-    }
-
-    return pts[0];
+    return sum;
 }
 
 void interpolate_curve(SDL_Renderer *renderer, Point *interp_points, Point *points)
 {
-    SDL_SetRenderDrawColor(renderer, 255, 0, 0, SDL_ALPHA_OPAQUE);
     for (int k = 0; k < INTERP_RES; k++) {
-        float t = (float)k / (INTERP_RES - 1);
-        interp_points[k].x = 0;
-        interp_points[k].y = 0;
-
-        Point p;
-        if (k != 0 && k == guide_line) {
-            p = de_casteljau(renderer, points, t, 1);
-        }
-        else {
-            p = de_casteljau(renderer, points, t, 0);
-        }
-
-        interp_points[k].x = p.x;
-        interp_points[k].y = p.y;
+        double t = (float)k / (INTERP_RES - 1);
+        interp_points[k] = approx(points, t);
     }
 }
 
@@ -87,16 +63,6 @@ void draw_curve(SDL_Renderer *renderer, Point *interp_points)
     for (int i = 0; i < INTERP_RES - 1; i++) {
         SDL_RenderDrawLine(renderer, interp_points[i].x, interp_points[i].y,
                            interp_points[i + 1].x, interp_points[i + 1].y);
-    }
-}
-
-static inline void bounds_check()
-{
-    if (guide_line < 0) {
-        guide_line = 0;
-    }
-    else if (guide_line > INTERP_RES - 1) {
-        guide_line = INTERP_RES - 1;
     }
 }
 
@@ -168,10 +134,6 @@ int main(int argc, char* argv[])
                 break;
             case SDL_MOUSEBUTTONUP:
                 selected_point = NULL;
-                break;
-            case SDL_MOUSEWHEEL:
-                guide_line += event.wheel.y;
-                bounds_check();
                 break;
             case SDL_KEYDOWN:
                 switch (event.key.keysym.sym) {
