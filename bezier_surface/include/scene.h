@@ -10,13 +10,15 @@ typedef struct Scene
 {
     vec3 *points;
     vertex_t *disp_points;
-    
+
     Material material;
 
     int dim_m;
     int dim_n;
     double *dz;
     int res;
+
+    GLuint texture_id;
 } Scene;
 
 /**

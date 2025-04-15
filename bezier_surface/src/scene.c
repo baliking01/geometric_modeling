@@ -5,8 +5,14 @@
 #include <stdlib.h>
 #include <math.h>
 
+extern unsigned long long int fact[21];
+
 void init_scene(Scene* scene)
 {   
+    scene->texture_id = load_texture("assets/textures/cube.png");
+    glBindTexture(GL_TEXTURE_2D, scene->texture_id);
+
+
     // material properties
     scene->material.ambient.red = 0.0;
     scene->material.ambient.green = 0.0;
@@ -26,7 +32,7 @@ void init_scene(Scene* scene)
     // surface parameters
     scene->dim_n = 10;
     scene->dim_m = 10;
-    scene->res = 2;
+    scene->res = 4;
     size_t n_elements = scene->dim_n * scene->dim_m;
     scene->points = (vec3*)malloc(n_elements * sizeof(vec3));
     scene->dz = (double*)malloc(n_elements * sizeof(double));
@@ -40,9 +46,25 @@ void init_scene(Scene* scene)
     for (int i = 0; i < dim_n; i++) {
         for (int j = 0; j < dim_m; j++) {
             scene->points[i*dim_m + j] = (vec3){i, j, rand() % 4};
+            //scene->points[i*dim_m + j] = (vec3){i, j, 0};
             scene->dz[i*dim_m + j] = scene->points[i*dim_m + j].z;
         }
     }
+
+
+    // pre-map texture coordinates
+    int res = scene->res;
+    double u, v;
+    for (int i = 0; i < dim_n * res; i++) {
+        for (int j = 0; j < dim_m * res; j++) {
+            u = (double)i / ((dim_n * res) - 1);
+            v = (double)j / ((dim_m * res) - 1);
+            scene->disp_points[i*dim_m*res + j].texel = (texel_t){u, v};
+        }
+    }
+
+    // pre-compute bernstein polynomials
+
 }
 
 void set_lighting()
@@ -85,17 +107,22 @@ void set_material(const Material* material)
     glMaterialfv(GL_FRONT_AND_BACK, GL_SHININESS, &(material->shininess));
 }
 
-// TODO: implement lookup table
-unsigned long binom(int n, int k)
+unsigned long long int slow_binom(int n, int k)
 {
-    if (k > n) return 0;
-    if (k == 0 || k == n) return 1;
-    unsigned long res = 1;
+    unsigned long long res = 1;
     for (int i = 1; i <= k; i++) {
         res *= n - (k - i);
         res /= i;
     }
     return res;
+}
+
+unsigned long long binom(int n, int k)
+{
+    if (k < 0 || k > n) return 0;
+    if (k == 0 || k == n) return 1;
+    if (n > 21 || k > 21) return slow_binom(n, k);
+    return fact[n] / (fact[k] * fact[n - k]);
 }
 
 // compute the k-th bernstein polynomial of n-th degree at t
@@ -153,7 +180,7 @@ void update_scene(Scene* scene)
         scene->points[i].z = ((sin(scene->dz[i]) + 1) / 2) * 4;
     }
 
-    // compute bezier surface using control points
+    // compute bezier surface
     double u, v;
     for (int i = 0; i < dim_n * res; i++) {
         for (int j = 0; j < dim_m * res; j++) {
@@ -220,46 +247,35 @@ void render_scene(const Scene* scene)
     int dim_m = scene->dim_m;
     int res = scene->res;
 
-    vertex_t v1, v2, v3;
-    glBegin(GL_TRIANGLES);
-    for (int i = 0; i < dim_n * res - 1; i++) {
-        for (int j = 0; j < dim_m * res - 1; j++) {
-
+    vertex_t v1, v2, v3, v4;
+    glBegin(GL_QUADS);
+    for (int i = 0; i < dim_n*res - 1; i++) {
+        for (int j = 0; j < dim_m*res - 1; j++) {
             v1 = scene->disp_points[i*dim_m*res + j];
-            glColor3f(1.0, 0, 0);
-            glVertex3f(v1.pos.x, v1.pos.y, v1.pos.z);
-            glNormal3f(v1.normal.x, v1.normal.y, v1.normal.z);
+            v2 = scene->disp_points[(i+1)*dim_m*res + j];
+            v3 = scene->disp_points[(i+1)*dim_m*res + j+1];
+            v4 = scene->disp_points[i*dim_m*res + j+1];
 
-            v2 = scene->disp_points[(i + 1)*dim_m*res + j];
-            glColor3f(0, 1.0, 0);
-            glVertex3f(v2.pos.x, v2.pos.y, v2.pos.z);
-            glNormal3f(v2.normal.x, v2.normal.y, v2.normal.z);
+            glVertex3fv((float*)(&v1.pos));
+            glVertex3fv((float*)(&v2.pos));
+            glVertex3fv((float*)(&v3.pos));
+            glVertex3fv((float*)(&v4.pos));
 
-            v3 = scene->disp_points[(i + 1)*dim_m*res + j + 1];
-            glColor3f(1.0, 1.0, 0);
-            glVertex3f(v3.pos.x, v3.pos.y, v3.pos.z);
-            glNormal3f(v3.normal.x, v3.normal.y, v3.normal.z);
+            glNormal3fv((float*)(&v1.normal));
+            glNormal3fv((float*)(&v2.normal));
+            glNormal3fv((float*)(&v3.normal));
+            glNormal3fv((float*)(&v4.normal));
 
-
-            glColor3f(1.0, 0, 1.0);
-            glVertex3f(v1.pos.x, v1.pos.y, v1.pos.z);
-            glNormal3f(v1.normal.x, v1.normal.y, v1.normal.z);
-
-            glColor3f(0.0, 1.0, 1.0);
-            glVertex3f(v3.pos.x, v3.pos.y, v3.pos.z);
-            glNormal3f(v3.normal.x, v3.normal.y, v3.normal.z);
-
-
-            v2 = scene->disp_points[i*dim_m*res + j + 1];
-            glColor3f(0, 0, 1.0);
-            glVertex3f(v2.pos.x, v2.pos.y, v2.pos.z);
-            glNormal3f(v2.normal.x, v2.normal.y, v2.normal.z);
+            glTexCoord2fv((float*)(&v1.texel));
+            glTexCoord2fv((float*)(&v2.texel));
+            glTexCoord2fv((float*)(&v3.texel));
+            glTexCoord2fv((float*)(&v4.texel));
         }
     }
-
     glEnd();
 
     // visualize normals
+    
     glBegin(GL_LINES);
     for(int i = 0; i < dim_n*res * dim_m*res; i++) {
         v1 = scene->disp_points[i];
@@ -272,6 +288,7 @@ void render_scene(const Scene* scene)
         glVertex3f(v1.pos.x, v1.pos.y, v1.pos.z);
     }
     glEnd();
+    
 }
 
 void draw_origin()
