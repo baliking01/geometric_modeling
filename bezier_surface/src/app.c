@@ -64,7 +64,9 @@ void init_opengl()
     glClearDepth(1.0);
 
     glEnable(GL_TEXTURE_2D);
-    glDisable(GL_LIGHTING);
+
+    glEnable(GL_LIGHTING);
+    glEnable(GL_LIGHT0);
 }
 
 void reshape(GLsizei width, GLsizei height)
@@ -208,8 +210,8 @@ void render_app(App* app)
 void destroy_app(App* app)
 {
     free(app->scene.points);
-    free(app->scene.dz);
     free(app->scene.disp_points);
+    free(app->scene.dz);
     if (app->gl_context != NULL) {
         SDL_GL_DeleteContext(app->gl_context);
     }

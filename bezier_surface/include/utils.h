@@ -11,6 +11,12 @@ typedef struct vec3
     float z;
 } vec3;
 
+typedef struct texel_t
+{
+    float u;
+    float v;
+} texel_t;
+
 /**
  * Color with RGB components
  */
@@ -31,6 +37,13 @@ typedef struct Material
     struct Color specular;
     float shininess;
 } Material;
+
+typedef struct vertex_t
+{
+    vec3 pos;
+    vec3 normal;
+    texel_t texel;
+} vertex_t;
 
 /**
  * Calculates radian from degree.

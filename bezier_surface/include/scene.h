@@ -8,11 +8,14 @@
 
 typedef struct Scene
 {
-    Vertex *points;
-    double *dz;
-    int dim_n;
+    vec3 *points;
+    vertex_t *disp_points;
+    
+    Material material;
+
     int dim_m;
-    Vertex *disp_points;
+    int dim_n;
+    double *dz;
     int res;
 } Scene;
 
