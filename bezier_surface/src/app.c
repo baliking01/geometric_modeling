@@ -114,6 +114,8 @@ void handle_app_events(App* app)
             case SDL_SCANCODE_ESCAPE:
                 app->is_running = false;
                 break;
+
+            // movement
             case SDL_SCANCODE_W:
                 set_camera_speed(&(app->camera), 1);
                 break;
@@ -132,6 +134,29 @@ void handle_app_events(App* app)
             case SDL_SCANCODE_LCTRL:
                 app->camera.speed.z = -1;
                 break;
+
+            // interactions
+            case SDL_SCANCODE_P:
+                toggle_control_polygon(&app->scene);
+                break;
+            case SDL_SCANCODE_N:
+                toggle_normals(&app->scene);
+                break; 
+            case SDL_SCANCODE_T:
+                toggle_texture();
+                break; 
+            case SDL_SCANCODE_UP:
+                change_dim(&app->scene, 1, 1);
+                break; 
+            case SDL_SCANCODE_DOWN:
+                change_dim(&app->scene, 1, -1);
+                break; 
+            case SDL_SCANCODE_LEFT:
+                change_dim(&app->scene, 2, 1);
+                break; 
+            case SDL_SCANCODE_RIGHT:
+                change_dim(&app->scene, 2, -1);
+                break; 
             default:
                 break;
             }

@@ -5,7 +5,12 @@
 #include <stdlib.h>
 #include <math.h>
 
+#include <stdio.h>
+
 extern unsigned long long int fact[21];
+
+#define MAX_DIM 15
+#define MAX_RES 20
 
 void init_scene(Scene* scene)
 {   
@@ -14,57 +19,25 @@ void init_scene(Scene* scene)
 
 
     // material properties
-    scene->material.ambient.red = 0.0;
-    scene->material.ambient.green = 0.0;
-    scene->material.ambient.blue = 0.0;
+    scene->material.ambient.red = 5.0;
+    scene->material.ambient.green = 5.0;
+    scene->material.ambient.blue = 5.0;
 
     scene->material.diffuse.red = 1.0;
     scene->material.diffuse.green = 1.0;
-    scene->material.diffuse.blue = 0.0;
+    scene->material.diffuse.blue = 1.0;
 
-    scene->material.specular.red = 0.0;
-    scene->material.specular.green = 0.0;
-    scene->material.specular.blue = 0.0;
+    scene->material.specular.red = 3.0;
+    scene->material.specular.green = 3.0;
+    scene->material.specular.blue = 3.0;
 
-    scene->material.shininess = 0.0;
+    scene->material.shininess = 0.7;
 
+    init_surface(scene, 5, 4, 10);
 
-    // surface parameters
-    scene->dim_n = 10;
-    scene->dim_m = 10;
-    scene->res = 4;
-    size_t n_elements = scene->dim_n * scene->dim_m;
-    scene->points = (vec3*)malloc(n_elements * sizeof(vec3));
-    scene->dz = (double*)malloc(n_elements * sizeof(double));
-
-    n_elements = (scene->dim_n * scene->res) * (scene->dim_m * scene->res);
-    scene->disp_points = (vertex_t*)malloc(n_elements * sizeof(vertex_t));
-
-    // generate random surface
-    int dim_n = scene->dim_n;
-    int dim_m = scene->dim_m;
-    for (int i = 0; i < dim_n; i++) {
-        for (int j = 0; j < dim_m; j++) {
-            scene->points[i*dim_m + j] = (vec3){i, j, rand() % 4};
-            //scene->points[i*dim_m + j] = (vec3){i, j, 0};
-            scene->dz[i*dim_m + j] = scene->points[i*dim_m + j].z;
-        }
-    }
-
-
-    // pre-map texture coordinates
-    int res = scene->res;
-    double u, v;
-    for (int i = 0; i < dim_n * res; i++) {
-        for (int j = 0; j < dim_m * res; j++) {
-            u = (double)i / ((dim_n * res) - 1);
-            v = (double)j / ((dim_m * res) - 1);
-            scene->disp_points[i*dim_m*res + j].texel = (texel_t){u, v};
-        }
-    }
-
-    // pre-compute bernstein polynomials
-
+    // set visibility
+    scene->normals = 0;
+    scene->control_polygon = 0;
 }
 
 void set_lighting()
@@ -177,7 +150,7 @@ void update_scene(Scene* scene)
     // oscillate control points
     for (int i = 0; i < dim_n * dim_m; i++) {
         scene->dz[i] += 0.01 + 1/(((rand() % 5) + 1)*10);
-        scene->points[i].z = ((sin(scene->dz[i]) + 1) / 2) * 4;
+        scene->points[i].z = ((sin(scene->dz[i]) + 1) / 2) * 2;
     }
 
     // compute bezier surface
@@ -248,6 +221,7 @@ void render_scene(const Scene* scene)
     int res = scene->res;
 
     vertex_t v1, v2, v3, v4;
+    vec3 p1, p2;
     glBegin(GL_QUADS);
     for (int i = 0; i < dim_n*res - 1; i++) {
         for (int j = 0; j < dim_m*res - 1; j++) {
@@ -256,9 +230,13 @@ void render_scene(const Scene* scene)
             v3 = scene->disp_points[(i+1)*dim_m*res + j+1];
             v4 = scene->disp_points[i*dim_m*res + j+1];
 
+            glColor3f(1, 0, 0);
             glVertex3fv((float*)(&v1.pos));
+            glColor3f(0, 1, 0);
             glVertex3fv((float*)(&v2.pos));
+            glColor3f(1, 0, 1);
             glVertex3fv((float*)(&v3.pos));
+            glColor3f(1, 1, 0);
             glVertex3fv((float*)(&v4.pos));
 
             glNormal3fv((float*)(&v1.normal));
@@ -275,21 +253,187 @@ void render_scene(const Scene* scene)
     glEnd();
 
     // visualize normals
-    
-    glBegin(GL_LINES);
-    for(int i = 0; i < dim_n*res * dim_m*res; i++) {
-        v1 = scene->disp_points[i];
 
-        glColor3f(1.0, 1.0, 1.0);
-        glVertex3f(v1.pos.x, v1.pos.y, v1.pos.z);
-        v1.pos.x += v1.normal.x;
-        v1.pos.y += v1.normal.y;
-        v1.pos.z += v1.normal.z;
-        glVertex3f(v1.pos.x, v1.pos.y, v1.pos.z);
+    if (scene->normals) {
+        glBegin(GL_LINES);
+        for(int i = 0; i < dim_n*res * dim_m*res; i++) {
+            v1 = scene->disp_points[i];
+
+            glColor3f(1.0, 1.0, 1.0);
+            glVertex3f(v1.pos.x, v1.pos.y, v1.pos.z);
+            v1.pos.x += v1.normal.x;
+            v1.pos.y += v1.normal.y;
+            v1.pos.z += v1.normal.z;
+            glVertex3f(v1.pos.x, v1.pos.y, v1.pos.z);
+        }
+        glEnd();
     }
-    glEnd();
+    
+
+    // visualize control polygon
+
+    if (scene->control_polygon) {
+        glBegin(GL_LINES);
+        for(int i = 0; i < dim_n; i++) {
+            for (int j = 0; j < dim_m - 1; j++) {
+                p1 = scene->points[i*dim_m + j];
+                p2 = scene->points[i*dim_m + j+1];
+
+                glColor3f(1.0, 1.0, 1.0);
+                glVertex3f(p1.x, p1.y, p1.z);
+                glVertex3f(p2.x, p2.y, p2.z);
+            }
+        }
+        glEnd();
+
+        glBegin(GL_LINES);
+        for(int i = 0; i < dim_n - 1; i++) {
+            for (int j = 0; j < dim_m; j++) {
+                p1 = scene->points[i*dim_m + j];
+                p2 = scene->points[(i+1)*dim_m + j];
+
+                glColor3f(1.0, 1.0, 1.0);
+                glVertex3f(p1.x, p1.y, p1.z);
+                glVertex3f(p2.x, p2.y, p2.z);
+            }
+        }
+        glEnd();
+    }
     
 }
+
+void init_surface(Scene *scene, int n, int m, int r)
+{
+    // surface parameters
+    scene->dim_n = n;
+    scene->dim_m = m;
+    scene->res = r;
+
+    // populate point control and display points
+    size_t n_elements = scene->dim_n * scene->dim_m;
+    scene->points = (vec3*)malloc(n_elements * sizeof(vec3));
+    scene->dz = (double*)malloc(n_elements * sizeof(double));
+
+    n_elements = (scene->dim_n * scene->res) * (scene->dim_m * scene->res);
+    scene->disp_points = (vertex_t*)malloc(n_elements * sizeof(vertex_t));
+
+    generate_surface(scene);
+    premap_texture(scene);
+    //precompute_bezier(scene);
+}
+
+
+void generate_surface(Scene *scene)
+{
+    int dim_n = scene->dim_n;
+    int dim_m = scene->dim_m;
+    for (int i = 0; i < dim_n; i++) {
+        for (int j = 0; j < dim_m; j++) {
+            scene->points[i*dim_m + j] = (vec3){i, j, 10/((rand() % 10) + 1)};
+            //scene->points[i*dim_m + j] = (vec3){i, j, 0};
+            scene->dz[i*dim_m + j] = scene->points[i*dim_m + j].z;
+        }
+    }
+}
+
+void premap_texture(Scene *scene)
+{
+    int dim_n = scene->dim_n;
+    int dim_m = scene->dim_m;
+    int res = scene->res;
+    double u, v;
+    for (int i = 0; i < dim_n * res; i++) {
+        for (int j = 0; j < dim_m * res; j++) {
+            u = (double)i / ((dim_n * res) - 1);
+            v = (double)j / ((dim_m * res) - 1);
+            scene->disp_points[i*dim_m*res + j].texel = (texel_t){u, v};
+        }
+    }
+}
+
+// change the size of dimension dim by size
+// eg.: 3 -> change by -1 -> 2
+void change_dim(Scene *scene, int target_dim, int size)
+{
+    int dim_n = scene->dim_n;
+    int dim_m = scene->dim_m;
+    int res = scene->res;
+
+    // first dimension, n
+    if (target_dim == 1) {
+        dim_n += size;
+        if (dim_n > MAX_DIM || dim_n < 2) {
+            return;
+        }
+    }
+    // second dimension, m
+    else if (target_dim == 2) {
+        dim_m += size;
+        if (dim_m > MAX_DIM || dim_m < 2) {
+            return;
+        }
+    }
+    else {
+        return;
+    }
+    
+    // new array size
+    int n_elements = dim_n * dim_m;
+    vec3 *new_points = (vec3*)realloc(scene->points, n_elements * sizeof(vec3));
+    double *new_dz = (double*)realloc(scene->dz, n_elements * sizeof(double));
+
+    n_elements = (dim_n * res) * (dim_m * res);
+    vertex_t *new_disp = (vertex_t*)realloc(scene->disp_points, n_elements * sizeof(vertex_t));
+
+    if (new_points == NULL ||
+        new_dz     == NULL ||
+        new_disp   == NULL) {
+        // if the allocation fails, leave the size as is
+        // revert previous dimensional changes
+        printf("Reallocation failed!\n");
+        return;
+    }
+
+    // if the allocation succeeds, save the new blocks
+    scene->dim_n = dim_n;
+    scene->dim_m = dim_m;
+    scene->res = res;
+
+    scene->points = new_points;
+    scene->dz = new_dz;
+    scene->disp_points = new_disp;
+    
+    // regenerate the surface
+    generate_surface(scene);
+    premap_texture(scene);
+    printf("N:%d, M:%d\n", scene->dim_n, scene->dim_m);
+}
+
+void toggle_control_polygon(Scene *scene)
+{
+    scene->control_polygon = ~(scene->control_polygon);
+}
+
+void toggle_normals(Scene *scene)
+{
+    scene->normals = ~(scene->normals);
+}
+
+void toggle_texture()
+{
+    if (glIsEnabled(GL_TEXTURE_2D) == GL_FALSE) {
+        glEnable(GL_TEXTURE_2D);
+        glEnable(GL_LIGHTING);
+        glEnable(GL_LIGHT0);
+    }
+    else {
+        glDisable(GL_TEXTURE_2D);
+        glDisable(GL_LIGHTING);
+        glDisable(GL_LIGHT0);
+    }
+    
+}
+
 
 void draw_origin()
 {    
